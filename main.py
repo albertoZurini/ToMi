@@ -28,6 +28,7 @@ def main(opt):
             while any([v > 0 for v in quota.values()]):
                 world.reset()
                 stories, traces, story_type = generate_story(world)
+                
                 if quota[story_type] > 0:
                     quota[story_type] -= 1
                 else:

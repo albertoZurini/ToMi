@@ -1,3 +1,6 @@
+data/
+tomi_balanced_story_types/
+
 virtual/
 # Byte-compiled / optimized / DLL files
 __pycache__/

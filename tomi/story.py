@@ -79,6 +79,7 @@ def generate_story(
 
     # announce location of object
     chapter.append(actions.ObjectLocAction(oracle, obj, [a for a, _ in agents]))
+    trace.append("object_location")
     start_state = copy.deepcopy(oracle)
 
     # Allow up to 2 location changes and 1 move.  Randomize the order...
@@ -153,14 +154,16 @@ def generate_story(
         things = world.get_all("objects")
         thing = np.random.choice(things, 1)[0]
         chapter.insert(idx, actions.NoiseAction(oracle, person, thing))
+        trace.insert(idx, "noise")
 
     stories, traces = [], []
-    for q in ["memory", "search", "belief", "reality"]:
+    for q in ["belief"]: # ["memory", "search", "belief", "reality"]:
         qtext, qtrace = sample_question(start_state, oracle, a1, a2, obj, q, agent_1)
         stories.append(chapter + [qtext])
         traces.append(trace + [qtrace])
-    for q in ["search", "belief"]:
-        qtext, qtrace = sample_question(start_state, oracle, a2, a1, obj, q, agent_2)
-        stories.append(chapter + [qtext])
-        traces.append(trace + [qtrace])
+    # for q in ["search", "belief"]:
+    #     qtext, qtrace = sample_question(start_state, oracle, a2, a1, obj, q, agent_2)
+    #     stories.append(chapter + [qtext])
+    #     traces.append(trace + [qtrace])
+    
     return stories, traces, story_type
