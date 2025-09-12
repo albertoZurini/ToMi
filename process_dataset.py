@@ -235,7 +235,8 @@ for el in context_and_questions:
                 "recipe_name": q["recipe_name"],
                 "is_true_belief": el["state"]["is_true_belief"],
                 "prompt": prepare_prompt(full_text),
-                "answer": q["answer"],
+                "correct_answer": q["answer"],
+                "state": el["state"]
             }
         )
 
