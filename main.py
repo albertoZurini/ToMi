@@ -12,38 +12,82 @@ from tomi.world import World
 from tqdm import tqdm
 import numpy as np
 import random
+from question_recipes import QUESTION_RECIPES
+import json
 
 
 def main(opt):
     N = opt.num_stories
     w = None  # world
     world = World()
-    for data_type in ["train", "val", "test"]:
+    for data_type in ["train"]:  # , "val", "test"]:
         quota = {story_type: N // len(StoryType) for story_type in StoryType}
         stories_path = os.path.join(opt.out_dir, f"{data_type}.txt")
         trace_path = os.path.join(opt.out_dir, f"{data_type}.trace")
-        with open(stories_path, "w") as f, open(trace_path, "w") as trace_f, tqdm(
-            total=N
-        ) as pbar:
+        # with open(stories_path, "w") as f, open(trace_path, "w") as trace_f, tqdm(
+        #     total=N
+        # ) as pbar:
+        stories_to_save = []
+        with tqdm(total=N) as pbar:
             while any([v > 0 for v in quota.values()]):
                 world.reset()
-                stories, traces, story_type = generate_story(world)
-                
-                if quota[story_type] > 0:
-                    quota[story_type] -= 1
-                else:
-                    # We've already generated enough of this type of story
-                    continue
+                stories, traces, story_type, state = generate_story(world)
+
+                # if quota[story_type] > 0:
+                #     quota[story_type] -= 1
+                # else:
+                #     # We've already generated enough of this type of story
+                #     continue
                 for story, trace in zip(stories, traces):
-                    print(
-                        "\n".join(
-                            [f"{i+1} {line.render()}" for i, line in enumerate(story)]
-                        ),
-                        file=f,
-                    )
-                    print(",".join(trace + [story_type.value]), file=trace_f)
-                    f.flush()
+                    questions = build_questions(state)
+
+                    for q in questions:
+                        full_text = story + "\n" + q["question"]
+
+                        stories_to_save.append(
+                            {
+                                "id": len(stories),
+                                "recipe_name": q["recipe_name"],
+                                "is_true_belief": state["is_true_belief"],
+                                "prompt": prepare_prompt(full_text),
+                                "correct_answer": q["answer"],
+                                "state": state,
+                            }
+                        )
+                #             print(
+                #                 "\n".join(
+                #                     [f"{i+1} {line.render()}" for i, line in enumerate(story)]
+                #                 ),
+                #                 file=f,
+                #             )
+                #             print(",".join(trace + [story_type.value]), file=trace_f)
+                #             f.flush()
                 pbar.update(1)
+
+        with open("data/tomi_data.json", "w") as f:
+            json.dump(stories_to_save, f)
+
+
+def build_questions(state):
+    questions = []
+    for recipe in QUESTION_RECIPES:
+        question_text = recipe["question_template"].format(**state)
+        questions.append(
+            {
+                "recipe_name": recipe["name"],
+                "question": question_text,
+                "answer": recipe["get_correct_answer"](state),
+            }
+        )
+
+    return questions
+
+
+def prepare_prompt(text):
+    return f"""This is a situation with many characters. At the end, I will ask you to answer a question.
+{text}
+Think step by step, but then give me a concise reply of one word, enclosed within <answer></answer> tags.
+"""
 
 
 if __name__ == "__main__":
@@ -53,7 +97,7 @@ if __name__ == "__main__":
         "--num-stories",
         "-n",
         type=int,
-        default=1000,
+        default=100,
         help="Number of stories to generate for each type",
     )
     parser.add_argument("--out-dir", "-o", default="data", help="Output directory")

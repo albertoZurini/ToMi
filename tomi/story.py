@@ -13,6 +13,7 @@ from .oracle import Oracle
 from typing import List, Tuple
 from . import actions
 import numpy as np
+from question_recipes import QUESTION_RECIPES
 
 
 def sample_question(
@@ -44,24 +45,46 @@ def enter(oracle: Oracle, agent: str, observers: List[int], location: str):
     else:  # somewhere else, move this person into location
         return actions.EnterAction(oracle, (agent, location), observers)
 
-
 def generate_story(
     world: World,
 ) -> Tuple[List[List[actions.Action]], List[List[str]], StoryType]:
+    state = {
+        "agent0": "agent_0",
+        "agent1": "agent_1",
+        "agent2": "agent_2",
+        "object": "obj",
+        "initial_location": "initial_location",
+        "final_location": "final_location",
+        "room": "room",
+        "is_true_belief": False,
+        "agent_0_exited": "agent_0_exited",
+        "agent_1_exited": "agent_1_exited",
+        "agent_2_exited": "agent_2_exited",
+        "outside_location": "outside",
+        "agent_0_exited_before": "agent_0_exited_before",
+        "agent_1_exited_before": "agent_1_exited_before",
+        "agent_1_re_entered": False,
+        "agent_1_re_entered_same_room": False
+    }
+
     oracle = Oracle(world)
 
-    a1, a2, a3 = (world.get_agent() for _ in range(3))
+    a1, a2, a3 = (world.get_agent() for _ in range(3))    
     story_type = StoryType.true_belief
 
     location = world.get_location()
+    state["room"] = location
     alternative_loc = world.get_location()
 
     # Get an initial object and container in the room
     obj = world.get_object()
+    state["object"] = obj
     container_1 = world.get_container()
     container_2 = world.get_container()
     oracle.set_containers(location, [container_1, container_2])
     oracle.set_object_container(obj, container_1)
+    state["initial_location"] = container_1
+    state["final_location"] = container_2
 
     trace = []
     chapter = []
@@ -71,7 +94,12 @@ def generate_story(
     agents = [(a1, 0), (a2, 1)]
     enter_observers = []
     np.random.shuffle(agents)
-    agent_1, agent_2 = (x for _, x in agents)
+    agent_1, agent_2 = (x for _, x in agents) # TODO: enumerate
+
+    state["agent0"] = agent_1
+    state["agent1"] = agent_2
+    state["agent2"] = a3
+
     for agent, order in agents:
         chapter.append(enter(oracle, agent, enter_observers, location))
         enter_observers.append(agent)
@@ -87,7 +115,18 @@ def generate_story(
     np.random.shuffle(act_types)
 
     # If we move in the middle, this story moves into the false belief scenario.
-    story_type = StoryType.false_belief if act_types[1] == "move" else story_type
+    story_type = None
+    # StoryType.false_belief if act_types[1] == "move" else story_type
+    # DON'T TOUCH THIS, THIS IS CORRECT
+
+    # story_type = None
+    # if act_types[0] == "move":
+    #     story_type = StoryType.true_belief
+    # elif act_types[1] == "move":
+    #     if act_types[0] == ""
+    # elif act_types[2] == "move":
+    # else:
+    #     print("Spero di no")
 
     move_observers = {a1, a2}
     for i, act_type in enumerate(act_types):
@@ -102,6 +141,14 @@ def generate_story(
             chapter.append(actions.ExitedAction(oracle, a2))
             move_observers.remove(a2)
             trace.append(f"agent_1_exits")
+            state["agent_1_exited"] = True
+            
+            # The true/false belief should be set here based on when agent_1 exited
+            if "agent_0_moves_obj" in trace:
+                story_type = StoryType.false_belief # TODO: clean this
+            else:
+                story_type = StoryType.true_belief
+            
         else:
             enter_observers = [a1]
             # Assuming this is the last action, then with 50% chance exit the moving actor
@@ -115,6 +162,7 @@ def generate_story(
                 move_observers.remove(a1)
                 enter_observers = []
                 trace.append(f"agent_0_exits")
+                state["agent_0_exited"] = True
 
             enter_loc = location if np.random.randint(0, 2) == 0 else alternative_loc
             # a2 already exited, re-enter same room, or a different one
@@ -126,17 +174,25 @@ def generate_story(
             trace.append(
                 f"agent_1_reenters_" + ("alt_loc" if enter_loc != location else "loc")
             )
+            state["agent_1_re_entered"] = True
+            state["agent_1_re_entered_same_room"] = enter_loc != location
+            state["outside_location"] = location
+            
+            if enter_loc != location:
+                story_type = StoryType.true_belief # always true belief is agent_1 re-enters the same room
 
     # generate indices for which person 3 should enter/exit
     indices = np.random.choice(
         np.arange(len(chapter) + 1), replace=False, size=np.random.randint(0, 3)
     )
     indices.sort()
+    # This is not interesting for us, it's the noise agent
     for idx, action in zip(indices, ["enter", "exit"]):
         if action == "exit":
             chapter.insert(idx, actions.ExitedAction(oracle, a3))
             enter_observers.pop()  # remove person 3 from observers
             trace.insert(idx, f"agent_2_exits")
+            state["agent_2_exited"] = True
         else:
             enter_loc = location if np.random.randint(0, 2) == 0 else alternative_loc
             chapter.insert(
@@ -157,13 +213,15 @@ def generate_story(
         trace.insert(idx, "noise")
 
     stories, traces = [], []
-    for q in ["belief"]: # ["memory", "search", "belief", "reality"]:
-        qtext, qtrace = sample_question(start_state, oracle, a1, a2, obj, q, agent_1)
-        stories.append(chapter + [qtext])
-        traces.append(trace + [qtrace])
+    # for q in ["belief"]: # ["memory", "search", "belief", "reality"]:
+    #     qtext, qtrace = sample_question(start_state, oracle, a1, a2, obj, q, agent_1)
+    #     stories.append(chapter + [qtext])
+    #     traces.append(trace + [qtrace])
     # for q in ["search", "belief"]:
     #     qtext, qtrace = sample_question(start_state, oracle, a2, a1, obj, q, agent_2)
     #     stories.append(chapter + [qtext])
     #     traces.append(trace + [qtrace])
-    
-    return stories, traces, story_type
+
+    state["is_true_belief"] = story_type == StoryType.true_belief
+
+    return stories, traces, story_type, state
