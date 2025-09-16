@@ -28,44 +28,44 @@ def main(opt):
         #     total=N
         # ) as pbar:
         stories_to_save = []
-        with tqdm(total=N) as pbar:
-            while any([v > 0 for v in quota.values()]):
-                world.reset()
-                stories, traces, story_type, state = generate_story(world)
+        for _ in tqdm(range(N)):
+            world.reset()
+            stories, traces, story_type, state = generate_story(world)
 
-                # if quota[story_type] > 0:
-                #     quota[story_type] -= 1
-                # else:
-                #     # We've already generated enough of this type of story
-                #     continue
-                for story, trace in zip(stories, traces):
-                    questions = build_questions(state)
+            # if quota[story_type] > 0:
+            #     quota[story_type] -= 1
+            # else:
+            #     # We've already generated enough of this type of story
+            #     continue
+            for story, trace in zip(stories, traces):
+                questions = build_questions(state)
 
-                    for q in questions:
-                        full_text = story + "\n" + q["question"]
+                for q in questions:
+                    full_text = story + "\n" + q["question"]
 
-                        stories_to_save.append(
-                            {
-                                "id": len(stories),
-                                "recipe_name": q["recipe_name"],
-                                "is_true_belief": state["is_true_belief"],
-                                "prompt": prepare_prompt(full_text),
-                                "correct_answer": q["answer"],
-                                "state": state,
-                            }
-                        )
-                #             print(
-                #                 "\n".join(
-                #                     [f"{i+1} {line.render()}" for i, line in enumerate(story)]
-                #                 ),
-                #                 file=f,
-                #             )
-                #             print(",".join(trace + [story_type.value]), file=trace_f)
-                #             f.flush()
-                pbar.update(1)
+                    stories_to_save.append(
+                        {
+                            "id": len(stories_to_save),
+                            "recipe_name": q["recipe_name"],
+                            "is_true_belief": state["is_true_belief"],
+                            "prompt": prepare_prompt(full_text),
+                            "correct_answer": q["answer"],
+                            "trace": trace,
+                            "state": state,
+                        }
+                    )
+            #             print(
+            #                 "\n".join(
+            #                     [f"{i+1} {line.render()}" for i, line in enumerate(story)]
+            #                 ),
+            #                 file=f,
+            #             )
+            #             print(",".join(trace + [story_type.value]), file=trace_f)
+            #             f.flush()
+            # pbar.update(1)
 
         with open("data/tomi_data.json", "w") as f:
-            json.dump(stories_to_save, f)
+            json.dump(stories_to_save, f, indent=2)
 
 
 def build_questions(state):
@@ -84,10 +84,16 @@ def build_questions(state):
 
 
 def prepare_prompt(text):
-    return f"""This is a situation with many characters. At the end, I will ask you to answer a question.
+    return f"""This is a scenario involving multiple human characters moving between enclosed rooms (e.g., kitchen, bathroom, etc.) and interacting with objects.
+* If a character leaves a room and does not re-enter, consider their location to be "outside the current room".
+* Rooms are fully enclosed: characters cannot see into other rooms or outside.
+* A character can only see what is inside the room they are currently in.
+* Track the movements of each character over time. Their memory of objects and events is based only on what they saw while present in a room.
+* Also track the location of objects and whether a character can see or interact with them.
+* At the end, I will ask a question about what a character knows, sees, or could infer.
+
 {text}
-Think step by step, but then give me a concise reply of one word, enclosed within <answer></answer> tags.
-"""
+Think step by step, but then provide a concise one-word reply enclosed within <answer></answer> tags."""
 
 
 if __name__ == "__main__":

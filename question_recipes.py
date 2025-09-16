@@ -8,29 +8,12 @@ def logic_get_room(state):
     return state["room"]
 
 
-def logic_get_outside_location(state):
-    """Returns the name of the location outside the main room (e.g., 'garden')."""
-    return state["outside_location"]
-
-
 def logic_get_belief_agent1_think_agent0_is(state):
-    if state["agent_1_exited_before"]:
-        return state["room"]
-    else:
-        if state["agent_0_exited"]:
-            return state["outside_location"]
-        else:
-            return state["room"]
+    return state["agent_1_thinks_agent_0_is_in"]
 
 
 def logic_get_belief_agen0_think_agent1_is(state):
-    if state["agent_0_exited_before"]:
-        return state["room"]
-    else:
-        if state["agent_1_exited"]:
-            return state["outside_location"]
-        else:
-            return state["room"]
+    return state["agent_0_thinks_agent_1_is_in"]
 
 
 def logic_get_belief_object_area(state):
@@ -52,11 +35,6 @@ def logic_get_belief_object_location(state):
         ]  # Bob left before the move, so he thinks it's in the old spot.
 
 
-def logic_get_memory_object_initial_location(state):
-    """This is a pure memory check, not a belief about the current state."""
-    return state["initial_location"]
-
-
 def logic_get_memory_object_final_location(state):
     """This is a pure memory check, not a belief about the current state."""
     return state["final_location"]
@@ -69,30 +47,35 @@ def logic_get_perception_of_move(state):
 
 def logic_get_perception_agent1_location_when_object_moved(state):
     """Where was agent1 when object was moved? TB -> inside; FB -> outside"""
-    return state["room"] if state["is_true_belief"] else state["outside_location"]
-
-
-def logic_answer_yes(state):
-    return "Yes"
-
-
-def logic_answer_no(state):
-    return "No"
-
-
-def logic_get_unknown_location(state):
-    """This should always return Unknown"""
-    return "Unknown"
+    if state["is_true_belief"]:
+        return state["room"]
+    else:
+        if state["agent_1_re_entered"]:
+            if state["agent_1_re_entered_same_room"]:
+                return state["room"]
+            else:
+                return state["alt_location"]
+        else:
+            return state["outside_location"]
 
 
 def logic_answer_object_visible_to_agent1(state):
-    return "No" if state["agent_1_exited"] else "Yes"
+    if state["agent_1_exited"]:
+        if state["agent_1_re_entered"] and state["agent_1_re_entered_same_room"]:
+            return "Yes"
+        else:
+            return "No"
+    else:
+        return "Yes"
 
 
 def logic_answer_object_visible_to_agent0(state):
-    return "No" if state["agent_0_exited"] else "Yes"
+    if state["agent_0_exited"]:
+        return "No"
+    else:
+        return "Yes"
 
-
+# TODO: continue reviewing from here
 def logic_answer_initial_location_visible_to_agent1(state):
     return logic_answer_object_visible_to_agent1(state)
 
@@ -118,7 +101,16 @@ def logic_answer_room_visible_to_agent0(state):
 
 
 def logic_answer_outside_visible_to_agent1(state):
-    return "Yes" if state["agent_1_exited"] else "No"
+    return (
+        "Yes"
+        if (
+            state["agent_1_exited"]
+            and not (
+                state["agent_1_re_entered"]
+            )
+        )
+        else "No"
+    )
 
 
 def logic_answer_outside_visible_to_agent0(state):
@@ -126,8 +118,17 @@ def logic_answer_outside_visible_to_agent0(state):
 
 
 def logic_get_situation_area_agent1(state):
-    return state["outside_location"] if state["agent_1_exited"] else state["room"]
-
+    if state["agent_1_exited"]:
+        if state["agent_1_re_entered"]:
+            if state["agent_1_re_entered_same_room"]:
+                return state["room"]
+            else:
+                return state["alt_location"]
+        else:
+            return state["outside_location"]
+    else:
+        return state["room"]
+    
 
 def logic_get_situation_area_agent0(state):
     return state["outside_location"] if state["agent_0_exited"] else state["room"]
@@ -324,13 +325,13 @@ QUESTION_RECIPES = [
     },
     {
         "name": "belief_agent1_object_area_query_set2",
-        "question_template": "Which general area does {agent1} believe the {object} is in?",
+        "question_template": "Which room does {agent1} believe the {object} is in?",
         "entities_to_track": ["agent1", "object", "room", "outside_location"],
         "get_correct_answer": logic_get_belief_object_area,
     },
     {
         "name": "belief_agent1_object_area_query_set3",
-        "question_template": "According to {agent1}, what is the overall space where the {object} is located?",
+        "question_template": "According to {agent1}, what is the room where the {object} is located?",
         "entities_to_track": ["agent1", "object", "room", "outside_location"],
         "get_correct_answer": logic_get_belief_object_area,
     },
@@ -343,13 +344,13 @@ QUESTION_RECIPES = [
     },
     {
         "name": "belief_agent0_object_area_query_set2",
-        "question_template": "Which general area does {agent0} believe the {object} is in?",
+        "question_template": "Which room does {agent0} believe the {object} is in?",
         "entities_to_track": ["agent0", "object", "room", "outside_location"],
         "get_correct_answer": logic_get_belief_object_area,
     },
     {
         "name": "belief_agent0_object_area_query_set3",
-        "question_template": "According to {agent0}, what is the overall space where the {object} is located?",
+        "question_template": "According to {agent0}, what is the room where the {object} is located?",
         "entities_to_track": ["agent0", "object", "room", "outside_location"],
         "get_correct_answer": logic_get_belief_object_area,
     },
